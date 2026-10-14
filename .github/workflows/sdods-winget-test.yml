@@ -21,6 +21,7 @@ jobs:
           if ($out -notmatch 'Manifest validation succeeded') { throw 'validation failed' }
           $other = ($out -split "`n") | Where-Object { $_ -match 'Manifest (Warning|Error)' -and $_ -notmatch 'schema header URL' }
           if ($other) { throw "unexpected findings: $other" }
+          exit 0
       - name: winget install --manifest
         shell: pwsh
         run: |
