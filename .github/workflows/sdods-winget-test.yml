@@ -1,0 +1,35 @@
+name: sdods-winget-test
+on:
+  push:
+    branches: [sdods-winget-test-0.1.5]
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: manifests/s/SDODS
+      - name: winget validate
+        shell: pwsh
+        run: |
+          winget --version
+          $out = winget validate --manifest manifests/s/SDODS/SDODS/0.1.5 | Out-String
+          $out
+          if ($out -notmatch 'Manifest validation succeeded') { throw 'validation failed' }
+          $other = ($out -split "`n") | Where-Object { $_ -match 'Manifest (Warning|Error)' -and $_ -notmatch 'schema header URL' }
+          if ($other) { throw "unexpected findings: $other" }
+          exit 0
+      - name: winget install --manifest
+        shell: pwsh
+        run: |
+          winget settings --enable LocalManifestFiles
+          winget install --manifest manifests/s/SDODS/SDODS/0.1.5 --silent --accept-package-agreements --accept-source-agreements --disable-interactivity
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $exe = Join-Path $env:LOCALAPPDATA 'Programs\SDODS\SDODS.exe'
+          if (-not (Test-Path $exe)) { Get-ChildItem "$env:LOCALAPPDATA\Programs" | Out-String | Write-Host; throw "SDODS.exe not found at $exe" }
+          $sig = Get-AuthenticodeSignature $exe
+          "{0}  {1}" -f $sig.Status, $sig.SignerCertificate.Subject
+          if ($sig.Status -ne 'Valid') { throw 'installed SDODS.exe is not validly signed' }
